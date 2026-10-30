@@ -25,8 +25,8 @@ class MessageParser:
     TIME_PATTERN = r'時間[：:]\s*(\d{1,2}:\d{2}[\-~]\d{1,2}:\d{2})'
     
     # 報名格式：日期 Court 名字 +/-N (單筆)
-    #REGISTRATION_PATTERN_SINGLE = r'(\d{1,2})/(\d{1,2})\s+(上午場|下午場|AM|PM)\s+(\S+)\s+([+-]\d+)'
-    REGISTRATION_PATTERN_SINGLE = r'(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i:AM|PM))\s+(\S+)\s+([+-]\d+)'
+    # 支援名字包含括號，如：保耀(FB)+1 或 保耀（FB）+1
+    REGISTRATION_PATTERN_SINGLE = r'(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i:AM|PM))\s+([^\s]+(?:\s*[（(][^）)]*[）)])?)\s*([+-]\d+)$'
 
     # 報名格式：日期 Court 名字 +/-N 或 名單1 +/-N1, 名單2 +/-N2
     #REGISTRATION_PATTERN = r'(\d{1,2})/(\d{1,2})\s+(上午場|下午場|AM|PM)\s+([^\s,]+\s+[+-]\d+(?:\s*,\s*[^\s,]+\s+[+-]\d+)*)'
