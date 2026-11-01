@@ -300,6 +300,20 @@ def create_handler():
                     if registration:
                         result = registration_engine.handle_registration(registration)
                     else:
+                        # 跳過複製 Bot 回覆的訊息（避免被誤判為公告）
+                        if '【批次報名結果】' in message_text:
+                            reply_text = "⚠️ 此為報名結果訊息，無法作為新場次公告使用。\n請按照格式發布完整公告訊息："
+                            line_bot_api.reply_message(
+                                event.reply_token,
+                                TextSendMessage(text=reply_text)
+                            )
+                            log_service.info(
+                                "收到複製的 Bot 回覆訊息，拒絕處理",
+                                source_id=source_id,
+                                preview=message_text[:50]
+                            )
+                            return
+
                         # 嘗試解析為公告
                         announcement = parser.parse_announcement(message_text)
 
