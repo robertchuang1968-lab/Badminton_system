@@ -36,7 +36,8 @@ class MessageParser:
     BATCH_OPERATION_PATTERN = r'本次操作報名[：:]\\s*(.+)'
     
     # 容量調整指令格式：/capacity MM/DD Court X
-    CAPACITY_PATTERN = r'^/capacity\s+(\d{1,2})/(\d{1,2})\s+(上午場|下午場|AM|PM)\s+(\d+)$'
+    # 支援大小寫 AM/PM（(?i:AM|PM) 為 case-insensitive）
+    CAPACITY_PATTERN = r'^/capacity\s+(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i:AM|PM))\s+(\d+)$'
     
     def parse_capacity_command(self, message: str) -> Optional[dict]:
         """
