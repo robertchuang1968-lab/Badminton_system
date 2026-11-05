@@ -25,30 +25,30 @@
    - 若 `is_valid = False`（如 11/32、13/45），立即回覆錯誤訊息並停止處理
    - 錯誤訊息：「⚠️ 無效日期！月份或日期超出範圍（如 11/32）。請使用有效日期重新發布公告。」
 4. 檢查是否為新開場次（對應 Excel 檔案不存在）
-5. Excel 檔案命名規則：
+4. Excel 檔案命名規則：
    - 將日期 Date 拆成 Mon, Day 2 個參數
    - 取當天日期 (Today) 的年份 Year
    - 若 Year/Mon/Day < Today，則檔案名 = `(Year+1)_Mon_Day-Court.xlsx`
    - 否則檔案名 = `Year_Mon_Day-Court.xlsx`
    - Court=AM（上午場）；Court=PM（下午場）
-6. 依取得之 Date, Court 檢查 Excel 檔案是否存在：
+5. 依取得之 Date, Court 檢查 Excel 檔案是否存在：
    - 若不存在則建立新檔案，並重新讀取 LINE 訊息
-7. 表頭 Head：
+6. 表頭 Head：
    ```
    10/9（星期五）歡樂羽球上午場
    ✨地點：晴天羽球館
    費用：270元/人
    時間：9:00-12:00
    ```
-8. 名單 Name_List：依順序號 1, 2, 3, …, 候 1, 候 2,.. 讀取名稱，並寫入 DataFrame 中
-9. 表尾 Tail：
+7. 名單 Name_List：依順序號 1, 2, 3, …, 候 1, 候 2,.. 讀取名字，並寫入 DataFrame 中
+8. 表尾 Tail：
    ```
    🌟限制（xx 人），候補可報名，但要候補到才可來打喔！
    🌟新人請看記事本
    🌟到場繳費簽名時，請在簿子簽上您的號碼跟名字（務必跟群組報名一致，以利對帳）
    ```
-10. 將上述 Head, Name_List, Tail 貼到新建立的 Excel 上，並重新存檔（依檔案命名規則）
-11. 若不是新開場次則開啟對應的 Excel 檔案，並將 Name_List 貼到對應儲存格，A5=1, A6=2, …；B5=名字 1, B6=名字 2, …
+9. 將上述 Head, Name_List, Tail 貼到新建立的 Excel 上，並重新存檔（依檔案命名規則）
+10. 若不是新開場次則開啟對應的 Excel 檔案，並將 Name_List 貼到對應儲存格，A5=1, A6=2, …；B5=名字 1, B6=名字 2, …
 
 ### 1.2 自動功能：報名/取消報名
 
@@ -95,17 +95,18 @@ REGISTRATION_PATTERN_SINGLE = r'(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i:A
    - 將 `Head\n + Name_List\n + Tail` 貼在 LINE 上
 6. **若檔案存在，且 Num < 0（取消報名）**（v21 修正）：
    - 開啟 Excel 檔，並讀取 Head, Name_List, Tail
-   - **精確匹配人名**（禁止子字串匹配）：
-     - 計算名單中目標 Name 出現次數 x
-     - 若 x < |Num|，則在 LINE 貼文：
-       ```
-       {Date}+空格+{Court}場中，{Name} 報名數=x，< 你要取消的筆數{Num}，本次報名動作無法完成！
-       ```
-     - 若 x >= |Num|，則：
-       - **優先刪除 Name_List 中候補名單**（ex. No=候 1, 候 2,..）
-       - 再刪除正常名單（ex. No=1, 2, …）
-       - 重複上述動作，直到刪除數量=|Num|
-       - 將更新後的 Name_List 貼於 Excel 檔案上，並儲存檔案
+   - 檢查 1~max number 及候 1~候 n，對應的 Name 欄位中是否有相符名字
+   - **精確匹配人名**（v21 修正）：使用 `name.strip() == registration.name.strip()` 進行精確比對，禁止子字串匹配
+   - 計算相符合的名字數量 = x
+   - 若 x < ABS(Num)，則在 LINE 貼文：
+     ```
+     {Date}+空格+{Court}場中，{Name}報名數=x，< 你要取消的筆數{Num}，本次報名動作無法完成！
+     ```
+   - 若 x >= ABS(Num)，則：
+     - **優先刪除 Name_List 中候補名單**（ex. No=候 1, 候 2,..）
+     - 再刪除正常名單（ex. No=1, 2, …）
+     - 重複上述動作，直到刪除數量=ABS(Num)
+     - 將更新後的 Name_List 貼於 Excel 檔案上，並儲存檔案
    - 將 `Head\n + Name_List\n + Tail\n` 貼於 LINE 群組上
 
 ### 1.3 批量操作與容量調整
@@ -152,26 +153,15 @@ REGISTRATION_PATTERN_SINGLE = r'(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i:A
 │  • 路由分流（手動公告 vs 自動報名）                          │
 │  • 請求驗證與權限檢查                                       │
 │  • 錯誤處理與日誌記錄                                       │
-│  • 健康檢查端點 GET /health                                 │
 └─────────────────────────────┬───────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │           Business & Parser Layer                            │
 │  • Message Parser（訊息剖析器）                              │
-│    - parse_announcement()：解析公告訊息                      │
-│    - parse_registration()：解析單筆報名                      │
-│    - parse_registration_batch()：解析批次報名                │
-│    - parse_batch_operation()：解析批量操作                   │
-│    - parse_capacity_command()：解析容量調整指令              │
-│    - _calculate_expiry()：日期有效性驗證（is_valid, is_expired）
 │  • Filename Rules Engine（檔名計算引擎）                     │
 │  • Registration Engine（報名/取消邏輯引擎）                  │
-│    - handle_announcement()：處理公告（含日期驗證）           │
-│    - handle_registration()：處理報名/取消                    │
-│    - handle_batch_operation()：處理批量操作                  │
-│    - _handle_signup()：報名邏輯                              │
-│    - _handle_unsignup()：取消報名邏輯（精確匹配）            │
+│  • Duplicate Check（重複報名檢查）                           │
 └─────────────────────────────┬───────────────────────────────┘
                               │
                               ▼
@@ -212,12 +202,11 @@ REGISTRATION_PATTERN_SINGLE = r'(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i:A
 - 驗證安全簽章：透過 LINE 提供的 X-Line-Signature 驗證請求來源
 - 過濾與分流：僅處理 TextMessage（文字訊息），其餘圖片、貼圖、語音直接丟棄
 - 錯誤處理：捕獲異常並記錄日誌，返回適當 HTTP 狀態碼
-- 健康檢查端點：`GET /health` 返回系統狀態（JSON）
-- 管理指令處理：`/get_group_id`、`/capacity`
-
-**Webhook 路由**：
-- `GET /webhook/line`：LINE 驗證請求（返回 200）
-- `POST /webhook/line`：LINE 業務訊息（簽章驗證 + 事件處理）
+|- 健康檢查端點：`GET /health` 返回系統狀態（JSON）
+|- 管理指令處理：`/get_group_id`、`/capacity`
+- Webhook 路由：
+  - `GET /webhook/line`：LINE 驗證請求（返回 200）
+  - `POST /webhook/line`：LINE 業務訊息（簽章驗證 + 事件處理）
 
 #### (3) 業務邏輯與剖析層（Business & Parser Layer）
 
@@ -231,15 +220,6 @@ REGISTRATION_PATTERN_SINGLE = r'(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i:A
 | 批量操作 | 本次操作報名：Name1 +/-N1, Name2 +/-N2 | 支援多筆一次性處理 |
 | 容量調整 | /capacity MM/DD Court X | **支援大小寫 AM/PM**（v21 新增） |
 
-**日期有效性驗證（`_calculate_expiry()`）**（v21 新增）：
-- 輸入：`date_str`（格式：`MM/DD`）
-- 輸出：`(full_date, is_expired, is_valid)`
-- 邏輯：
-  - 嘗試建構 `datetime(year, month, day)`
-  - 若拋出 `ValueError`（如 11/32、13/45），則 `is_valid = False`
-  - 若目標日期早於今日，則 `is_expired = True`
-- 被調用點：`parse_announcement()`、`parse_registration()`、`parse_registration_batch()`、`parse_batch_operation()`
-
 **檔名計算引擎（Filename Rules Engine）**：
 - 計算當前日期與目標月份日期的關係
 - 取得系統當前日期 $Today$（以 $Year_{today}, Mon_{today}, Day_{today}$ 表示）
@@ -251,8 +231,8 @@ REGISTRATION_PATTERN_SINGLE = r'(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i:A
 
 | 情境 | 邏輯說明 |
 |------|----------|
-| Num > 0（報名） | 優先搜尋 1~MAX_CAPACITY 欄位的空值，依序補入姓名；若空白數量 p < Num，多餘者自動 append 候補名單（編號從 MAX_CAPACITY + 1 開始）；【手動】報名允許重複（同一人名可出現多次） |
-| Num < 0（取消） | **精確匹配人名**（v21 修正）：`name.strip() == registration.name.strip()`，禁止子字串匹配；檢索名單中目標 Name 出現次數 x；若 x < \|Num\| 則退件；否則**優先刪除候補**，再刪除正取 |
+|| Num > 0（報名） | 優先搜尋 1~MAX_CAPACITY 欄位的空值，依序補入姓名；若空白數量 p < Num，多餘者自動 append 候補名單（編號從 MAX_CAPACITY + 1 開始）；【手動】報名允許重複（同一人名可出現多次） |
+|| Num < 0（取消） | **精確匹配人名**（v21 修正）：`name.strip() == registration.name.strip()`，禁止子字串匹配；檢索名單中目標 Name 出現次數 x；若 x < \|Num\| 則退件；否則**優先刪除候補**，再刪除正取 |
 | 重複報名檢查 | 【手動】報名不檢查重複，同一人名可多次報名 |
 | 批量操作 | 支援「本次操作報名：Name1 +/-N1, Name2 +/-N2」格式，一次性處理多筆報名/取消 |
 
@@ -367,7 +347,6 @@ Bot 加入群組後，可接收以下 webhook 事件：
 - 僅限群組成員可發送報名/取消訊息
 - Bot 不處理非群組訊息（Direct Message 忽略）
 - 管理者可透過特定指令（如 `!admin reset`）執行管理操作
-- 管理員列表存放於 `app/data/admin_list.json`
 
 ---
 
@@ -382,8 +361,6 @@ Bot 加入群組後，可接收以下 webhook 事件：
 | 網路連線失敗 | 重試 3 次後記錄錯誤 | 發送告警 |
 | 訊息格式錯誤 | 忽略並記錄 | 無 |
 | 資料庫連線失敗 | 重試 3 次後記錄錯誤 | 發送告警 |
-| **日期無效**（v21 新增） | **立即拒絕，回覆錯誤訊息** | **記錄警告日誌** |
-| **人名不匹配**（v21 修正） | **精確匹配，避免誤刪** | **記錄成功/失敗日誌** |
 
 ### 5.2 監控告警
 
@@ -491,9 +468,11 @@ sudo journalctl -u badminton-bot.service -f
 | Bot 未回應訊息 | Webhook URL 未設定 | 檢查 LINE Developers 後台設定 |
 | 簽章驗證失敗 | Channel Secret 錯誤 | 確認環境變數設定正確 |
 | Excel 檔案鎖住 | 上一次執行未正常結束 | 檢查並結束殘留進程 |
-| 訊息格式錯誤 | 使用者輸入格式不符 | 檢查日誌確認解析失敗原因 |
-| **收到無效日期**（v21 新增） | **使用者輸入如 11/32** | **正常行為，Bot 會回覆錯誤訊息** |
-| **人名被誤刪**（v21 修正） | **取消報名使用子字串匹配** | **已修正為精確匹配** |
+|| 訊息格式錯誤 | 使用者輸入格式不符 | 檢查日誌確認解析失敗原因 |
+|| **收到無效日期**（v21 新增） | **使用者輸入如 11/32** | **正常行為，Bot 會回覆錯誤訊息** |
+|| **人名被誤刪**（v21 修正） | **取消報名使用子字串匹配** | **已修正為精確匹配** |
+| `No handler of MessageEvent` | LINE SDK `add()` 方法使用錯誤 | 使用 `_WebhookHandler__add_handler()` 代替 |
+| 服務無法啟動 | `--reload` 模式下 lifespan 未執行 | 直接使用 `uvicorn app.main:app --host 0.0.0.0 --port 8000` |
 
 ### 8.3 備份策略
 
@@ -545,7 +524,7 @@ uvicorn 的 `--reload` 模式會啟動兩個進程：
 1. **監控進程**：監控檔案變更，執行 lifespan
 2. **Worker 進程**：處理 HTTP 請求
 
-當程式碼修改並重新載入時，lifespan 可能在監控進程中執行，但請求由 worker 進程處理。
+當程式碼修改並重新載入時，lifespan 可能在監控進程中執行，但請求由 worker 進程處理。兩者雖共享同一 Python 進程空間，但 lifespan 中的初始化邏輯（如註冊 handler）可能未在 worker 進程中正確執行。
 
 **解決方案**：
 1. **直接使用 `--reload` 模式**：
@@ -562,6 +541,10 @@ uvicorn 的 `--reload` 模式會啟動兩個進程：
            create_handler(), MessageEvent
        )
    ```
+
+**影響範圍**：
+- 所有使用 FastAPI + uvicorn `--reload` 的專案
+- 症狀：lifespan 中的初始化代碼未執行，服務狀態不一致
 
 ---
 
@@ -580,7 +563,7 @@ uvicorn 的 `--reload` 模式會啟動兩個進程：
 ```python
 def _extract_tail(self, message: str) -> Optional[str]:
     """提取備註尾碼 - 以關鍵字驅動，忽略前綴符號"""
-    lines = message.split('\n')
+    lines = message.split('\\n')
     tail_lines = []
     in_tail = False
 
@@ -597,8 +580,18 @@ def _extract_tail(self, message: str) -> Optional[str]:
             else:
                 break  # Tail 區塊結束
 
-    return '\n'.join(tail_lines) if tail_lines else None
+    return '\\n'.join(tail_lines) if tail_lines else None
 ```
+
+**核心邏輯**：
+1. **關鍵字驅動**：只要行中包含「限制」和「人」，即視為 Tail 起始行
+2. **忽略前綴符號**：不依賴任何特定符號（🌟、🚨 等）
+3. **區塊收集**：起始行之後，連續的特殊符號開頭行也納入 Tail
+4. **容錯性**：即使沒有符號，只要有「限制...人」關鍵詞就能正確解析
+
+**影響範圍**：
+- LINE 群組羽球報名系統
+- 症狀：Tail 無法解析，容量無法從 Tail 中提取
 
 ---
 
@@ -617,6 +610,10 @@ def _extract_tail(self, message: str) -> Optional[str]:
 cp /mnt/c/Users/rober/Desktop/LINE群組羽球報名系統/.env \
    /home/robert/workspace/LINE群組羽球報名系統/.env
 ```
+
+**影響範圍**：
+- WSL 環境下運行 Python 服務的專案
+- 症狀：環境變數未載入，預設值被使用
 
 ---
 
@@ -638,72 +635,9 @@ async for chunk in request.stream():
     body += chunk
 ```
 
----
-
-### 9.6 無效日期被接受（v21 新增）
-
-**問題現象**：
-- 使用者輸入 `11/32`、`13/45` 等無效日期
-- 系統未拒絕，反而建立 Excel 檔案
-
-**根本原因**：
-`_calculate_expiry()` 的例外被靜默吞掉，`is_expired` 保持 False。
-
-**解決方案**：
-1. `_calculate_expiry()` 回傳三元組 `(full_date, is_expired, is_valid)`
-2. `AnnouncementData`、`RegistrationData` 新增 `is_valid` 欄位
-3. `parse_announcement()`、`parse_registration()` 呼叫 `_calculate_expiry()`
-4. `handle_announcement()`、`handle_registration()` 檢查 `is_valid`
-
-**Git 提交**：`97a63c0 fix: 修復無效日期驗證與取消報名精確匹配`
-
----
-
-### 9.7 取消報名誤刪人名（v21 修正）
-
-**問題現象**：
-- 使用者輸入 `Jo -1`
-- 系統錯誤刪除 `Joshua`
-
-**根本原因**：
-`_handle_unsignup()` 使用 `in` 進行子字串匹配：
-```python
-"Jo" in "Joshua"  # 返回 True ❌
-```
-
-**解決方案**：
-改為精確匹配：
-```python
-"Joshua".strip() == "Jo".strip()  # 返回 False ✓
-```
-
 **影響範圍**：
-- 所有使用 `in` 進行人名匹配的場景
-- 建議：未來新增任何人名比對時，務必使用精確匹配
-
-**Git 提交**：`97a63c0 fix: 修復無效日期驗證與取消報名精確匹配`
-
----
-
-### 9.8 `/capacity` 指令不支援小寫（v21 修正）
-
-**問題現象**：
-- 使用者輸入 `/capacity 11/8 pm 32`（小寫 pm）
-- 系統回覆「指令參數不足」
-
-**根本原因**：
-正則表達式只接受大寫 `AM|PM`：
-```python
-CAPACITY_PATTERN = r'^/capacity\s+(\d{1,2})/(\d{1,2})\s+(上午場|下午場|AM|PM)\s+(\d+)$'
-```
-
-**解決方案**：
-改用大小寫不敏感正則：
-```python
-CAPACITY_PATTERN = r'^/capacity\s+(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i:AM|PM))\s+(\d+)$'
-```
-
-**Git 提交**：`4145fa0 fix: /capacity 指令支援大小寫 AM/PM`
+- 所有使用 FastAPI 處理 LINE webhook 的專案
+- 症狀：簽名驗證失敗，即使 Channel Secret 正確
 
 ---
 
@@ -754,25 +688,13 @@ CAPACITY_PATTERN = r'^/capacity\s+(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i
 10/9 PM Mike -1
 ```
 
-**【附 3】批量操作範例**：
-```
-本次操作報名：Beryl +1, Mike -1, John +2
-```
-
-**【附 4】容量調整範例**（v21 新增）：
-```
-/capacity 11/8 PM 32
-/capacity 11/8 pm 32  （支援小寫）
-/capacity 11/8 下午場 32
-```
-
 ### 10.2 Excel 檔案結構
 
 | 欄位 | 位置 | 說明 |
 |------|------|------|
 | Head | A1:A4 | 場次標題資訊 |
-| 正取名單 | A5:A28 | 序號（1-24）與姓名，僅填滿正取名額 |
-| 候補名單 | A29+ | 序號（25, 26, ...）與姓名（如「候1」、「候2」） |
+| 正取名單 | A5:A28 | 序号（1-24）與姓名，僅填滿正取名額 |
+| 候補名單 | A29+ | 序号（25, 26, ...）與姓名（如「候1」、「候2」） |
 | Tail | 候補名單之後 | 注意事項（🌟開頭的文字） |
 
 **重要規則**：
@@ -782,7 +704,6 @@ CAPACITY_PATTERN = r'^/capacity\s+(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i
 - Tail 文字必須放在所有名單（含候補）之後
 - 報名時先填入正取空位，空位用完後才新增候補
 - 取消報名時優先刪除候補，再刪除正取
-- **取消報名使用精確匹配，禁止子字串匹配**（v21 修正）
 
 ### 10.3 變更記錄
 
@@ -797,11 +718,287 @@ CAPACITY_PATTERN = r'^/capacity\s+(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i
 | v15 | 2026-10-21 | 修正取消報名邏輯：優先從候補刪除，再從正取刪除 | Robert |
 | v16 | 2026-10-21 | 整合原始規格書內容，補充附件範例，更新變更記錄格式 | Robert |
 | v17 | 2026-10-22 | 新增「踩坑記錄與已修復問題」章節；修正 LINE SDK `add()` 方法用法；修正 `uvicorn --reload` 模式問題；Tail 解析改為關鍵字驅動（「限制...人」），忽略前綴符號 | Robert/Agnes |
-| v18 | 2026-10-22 | 新增「LINE_CHANNEL_SECRET 未正確載入」與「FastAPI 簽名驗證邏輯錯誤」踩坑記錄；完善維運手冊 | Robert/Agnes |
+| v18 | 2026-10-22 | 新增「LINE_CHANNEL_SECRET 未正確載入」與「FastAPI 簽名驗證邏輯錯誤」踩坑記錄；完善維運手冊；Tail 解析改為關鍵字驅動（「限制...人」），忽略前綴符號 | Robert/Agnes |
 | v19 | 2026-10-29 | 新增「ngrok 啟動方式說明」與「同一日期多場次處理」；新增啟動腳本 `start_server.sh` 使用方法與測試結果 | Robert/Agnes |
-| v20 | 2026-10-30 | 新增 `/get_group_id` 指令、支援括號名字報名解析、collect_members.py 改為獨立參數模式 | Robert |
-| **v21** | **2026-11-05** | **新增日期有效性驗證（parse_announcement/parse_registration 呼叫 _calculate_expiry）；修正取消報名使用精確匹配避免誤刪（"Jo" 誤刪 "Joshua"）；新增健康檢查端點 /health；`/capacity` 指令支援大小寫 AM/PM；新增「無效日期被接受」與「取消報名誤刪人名」踩坑記錄** | **Robert** |
 
 ---
 
-**文檔結束**
+## 附錄：ngrok 啟動方式說明
+
+### 正確的 ngrok 啟動方式
+
+```bash
+ngrok start line-bot
+```
+
+或指定日誌：
+```bash
+ngrok start line-bot --log=/home/robert/workspace/LINE群組羽球報名系統/logs/ngrok.log
+```
+
+### 錯誤命令（會產生隨機域名）
+
+```bash
+ngrok http 8000  # 會忽略 ngrok.yml 配置，使用隨機域名
+```
+
+### 為什麼要用 `ngrok start line-bot`？
+
+| 命令 | 行為 |
+|------|------|
+| `ngrok start line-bot` | 讀取 `ngrok.yml` 中的「line-bot」tunnel 配置，使用固定域名 |
+| `ngrok http 8000` | 建立命令列暫存 tunnel，使用隨機域名（每次不同） |
+
+### 配置檔案位置
+
+- **系統配置**: `~/.config/ngrok/ngrok.yml`
+- **專案配置**: `/home/robert/workspace/LINE群組羽球報名系統/ngrok.yml`
+
+兩個配置檔案都定義了相同的 tunnel：
+```yaml
+tunnels:
+  line-bot:
+    addr: 8000
+    proto: http
+    domain: platypus-flexible-buck.ngrok-free.app
+```
+
+### LINE Webhook URL
+
+**固定網址**（不得更改）：
+```
+https://platypus-flexible-buck.ngrok-free.app/webhook/line
+```
+
+### 啟動腳本使用方法
+
+```bash
+cd /home/robert/workspace/LINE群組羽球報名系統
+
+./start_server.sh start      # 啟動所有服務
+./start_server.sh stop       # 停止所有服務
+./start_server.sh status     # 查看狀態
+./start_server.sh restart    # 重新啟動
+```
+
+**功能說明**：
+
+| 功能 | 說明 |
+|------|------|
+| 自動檢測現狀 | 若服務已在運行，跳過啟動避免重複 |
+| 健康檢查 | 確認 webhook URL 可達 |
+| PID 記錄 | 寫入 `logs/pids/` 目錄 |
+| 日誌分離 | uvicorn → `logs/uvicorn.log`，ngrok → `logs/ngrok.log` |
+
+**檢測邏輯**：
+- uvicorn：`pgrep -f "uvicorn app.main"`
+- ngrok：`curl http://localhost:4040/api/tunnels` 確認是否已有固定域名 tunnel
+
+### 測試結果
+
+| 情境 | uvicorn | ngrok | 結果 |
+|------|---------|-------|------|
+| 兩者都斷線 | ❌ | ❌ | 同時啟動兩個 ✓ |
+| 只有 uvicorn 斷線 | ❌ | ✅ | **只重啟 uvicorn** ✓ |
+| 只有 ngrok 斷線 | ✅ | ❌ | **只重啟 ngrok** ✓ |
+| 兩者都在運行 | ✅ | ✅ | 跳過，顯示現狀 ✓ |
+
+**測試日期**：2026-10-29
+**測試方法**：
+1. 手動 kill uvicorn → 執行 `./start_server.sh start` → 確認只重啟 uvicorn
+2. 手動 kill ngrok → 執行 `./start_server.sh start` → 確認只重啟 ngrok
+
+### 同一日期多場次處理
+
+若同一日期有多個場次（上午 + 下午），會產生兩個 Excel 檔案：
+- `2026_10_31-AM.xlsx` → 上午場
+- `2026_10_31-PM.xlsx` → 下午場
+
+**注意**：若先貼下午場公告再貼上午場公告，會同時存在兩個檔案。建議刪除錯誤的檔案。
+
+### 日誌檔案路徑
+
+- uvicorn log: `logs/uvicorn.log`
+- ngrok log: `logs/ngrok.log`
+- PID 記錄: `logs/pids/`
+
+### /get_group_id 指令 (v02)
+
+**Fungsi**: Mengambil ID grup dan user_id saat ini tanpa perlu mengatur LINE_GROUP_ID di .env.
+
+**Cara pakai**:
+1. Kirim `/get_group_id` di grup LINE
+2. Bot akan membalas dengan group_id dan user_id
+3. Simpan user_id ke `app/data/admin_list.json` untuk otorisasi admin
+
+**Alasan**: API `get_group_member_ids` LINE memerlukan akun bisnis (blue/green shield), sehingga tidak tersedia untuk akun personal (gray shield). Solusinya menggunakan webhook event yang otomatis memberikan user_id setiap kali anggota mengirim pesan.
+
+**Contoh response bot**:
+```
+📋 你的管理員資料：
+
+群組 ID：Ce5ebb024d5533eab3f290cecc5f0e895
+你的 User ID：Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+請將此 User ID 新增至 app/data/admin_list.json
+{
+  "managers": [
+    "Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  ]
+}
+```
+
+### collect_members.py — Update (v02)
+
+**Perubahan**: Script tidak lagi bergantung pada `LINE_GROUP_ID` di `.env`. Sekarang menggunakan parameter `--group-id`:
+
+```bash
+python3 scripts/collect_members.py --group-id "Uxxxxxxxxxxxxxxxxxxxxx"
+```
+
+atau dengan short flag:
+```bash
+python3 scripts/collect_members.py -g "Uxxxxxxxxxxxxxxxxxxxxx"
+```
+
+**Catatan**: Karena pembatasan API LINE untuk akun personal, pengumpulan data anggota grup masih memerlukan akses manual atau akan ditangani dengan cara lain di masa depan.
+
+---
+
+
+
+---
+
+## 9. 新增踩坑記錄（v21）
+
+### 9.9 無效日期被接受
+
+**問題現象**：
+- 使用者輸入 `11/32`、`13/45` 等無效日期
+- 系統未拒絕，反而建立 Excel 檔案
+
+**根本原因**：
+`_calculate_expiry()` 的例外被靜默吞掉，`is_expired` 保持 False。
+
+**解決方案**：
+1. `_calculate_expiry()` 回傳三元組 `(full_date, is_expired, is_valid)`
+2. `AnnouncementData`、`RegistrationData` 新增 `is_valid` 欄位
+3. `parse_announcement()`、`parse_registration()` 呼叫 `_calculate_expiry()`
+4. `handle_announcement()`、`handle_registration()` 檢查 `is_valid`
+
+**Git 提交**：`97a63c0 fix: 修復無效日期驗證與取消報名精確匹配`
+
+---
+
+### 9.10 取消報名誤刪人名
+
+**問題現象**：
+- 使用者輸入 `Jo -1`
+- 系統錯誤刪除 `Joshua`
+
+**根本原因**：
+`_handle_unsignup()` 使用 `in` 進行子字串匹配：
+```python
+"Jo" in "Joshua"  # 返回 True ❌
+```
+
+**解決方案**：
+改為精確匹配：
+```python
+"Joshua".strip() == "Jo".strip()  # 返回 False ✓
+```
+
+**影響範圍**：
+- 所有使用 `in` 進行人名匹配的場景
+- 建議：未來新增任何人名比對時，務必使用精確匹配
+
+**Git 提交**：`97a63c0 fix: 修復無效日期驗證與取消報名精確匹配`
+
+---
+
+### 9.11 `/capacity` 指令不支援小寫
+
+**問題現象**：
+- 使用者輸入 `/capacity 11/8 pm 32`（小寫 pm）
+- 系統回覆「指令參數不足」
+
+**根本原因**：
+正則表達式只接受大寫 `AM|PM`：
+```python
+CAPACITY_PATTERN = r'^/capacity\s+(\d{1,2})/(\d{1,2})\s+(上午場|下午場|AM|PM)\s+(\d+)$'
+```
+
+**解決方案**：
+改用大小寫不敏感正則：
+```python
+CAPACITY_PATTERN = r'^/capacity\s+(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i:AM|PM))\s+(\d+)$'
+```
+
+
+---
+
+**文档結束**
+
+---
+
+### 新增功能：支援括號名字報名（v21）
+
+**問題背景**：使用者常以「名字（備註）」或「名字(備註)」格式報名，原正則表達式無法正確解析。
+
+**解決方案**：修改 `REGISTRATION_PATTERN_SINGLE` 正則表達式，支援名字中包含全形或半形括號。
+
+**修改內容**：
+```python
+# v19 版本（不支援括號）
+REGISTRATION_PATTERN_SINGLE = r'(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i:AM|PM))\s+(\S+)\s+([+-]\d+)'
+
+# v21 版本（支援括號）
+REGISTRATION_PATTERN_SINGLE = r'(\d{1,2})/(\d{1,2})\s+(上午場|下午場|(?i:AM|PM))\s+([^\s]+(?:\s*[（(][^）)]*[）)])?)\s*([+-]\d+)$'
+```
+
+**測試結果**：
+
+| 輸入 | v19 | v21 |
+|------|-----|-----|
+| `10/31 PM 進 +1` | ✅ | ✅ |
+| `10/31 PM 保耀 +1` | ✅ | ✅ |
+| `10/31 PM 保耀(FB)+1` | ❌ | ✅ |
+| `10/31 PM 保耀（FB）+1` | ❌ | ✅ |
+
+**檔案位置**：`app/parsers/message_parser.py` 第 29 行
+
+---
+
+### 已知問題與解決（v21.1）
+
+**問題**：成員複製 Bot 回覆的「【批次報名結果】」訊息，修改日期後貼回群組，系統誤判為開新場次公告。
+
+**解決方案**：
+在 `main.py` 加入篩選邏輯，偵測訊息是否包含「【批次報名結果】」，若是則拒絕處理並回覆警告。
+
+**程式碼位置**：`app/main.py` 第 303-310 行
+
+```python
+# 跳過複製 Bot 回覆的訊息（避免被誤判為公告）
+if '【批次報名結果】' in message_text:
+    reply_text = "⚠️ 此為報名結果訊息，無法作為新場次公告使用。\n請按照格式發布完整公告訊息："
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=reply_text)
+    )
+    log_service.info(
+        "收到複製的 Bot 回覆訊息，拒絕處理",
+        source_id=source_id,
+        preview=message_text[:50]
+    )
+    return
+```
+
+**測試結果**：
+| 輸入 | 行為 |
+|------|------|
+| `【批次報名結果】11/31 PM 金城武 +1` | ❌ 拒絕處理，回覆警告 |
+| 正常公告訊息 | ✅ 正常處理 |
+| 正常報名指令 | ✅ 正常處理 |
+
+---
