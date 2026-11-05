@@ -144,14 +144,16 @@ class MessageParser:
                 num = int(item_match.group(2))
                 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
                 # 2026/10/28 新增程式碼
-                full_date, is_expired = self._calculate_expiry(date_str)
+                # 2026/11/05 新增 is_valid 驗證
+                full_date, is_expired, is_valid = self._calculate_expiry(date_str)
                 operations.append(RegistrationData(
                     date_str=date_str,
                     court=court,
                     name=name,
                     num=num,
                     full_date=full_date,
-                    is_expired=is_expired
+                    is_expired=is_expired,
+                    is_valid=is_valid
                 ))
                 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -197,14 +199,16 @@ class MessageParser:
 
                 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
                 # 2026/10/28 新增程式碼
-                full_date, is_expired = self._calculate_expiry(date_str)
+                # 2026/11/05 新增 is_valid 驗證
+                full_date, is_expired, is_valid = self._calculate_expiry(date_str)
                 registrations.append(RegistrationData(
                     date_str=date_str,
                     court=court,
                     name=name,
                     num=num,
                     full_date=full_date,
-                    is_expired=is_expired
+                    is_expired=is_expired,
+                    is_valid=is_valid
                 ))
                 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
@@ -253,6 +257,9 @@ class MessageParser:
         # 從 Tail 解析名額數
         capacity = self._parse_capacity_from_tail(tail)
         
+        # 驗證日期有效性
+        full_date, is_expired, is_valid = self._calculate_expiry(date_str)
+        
         return AnnouncementData(
             date_str=date_str,
             court=court,
@@ -260,7 +267,8 @@ class MessageParser:
             time=time,
             name_list=name_list,
             tail=tail,
-            capacity=capacity
+            capacity=capacity,
+            is_valid=is_valid
         )
     
     def parse_registration(self, message: str) -> Optional[RegistrationData]:
@@ -275,7 +283,9 @@ class MessageParser:
         date_str = f"{month}/{day}"
         # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         # 2026/10/28 新增程式碼
-        full_date, is_expired = self._calculate_expiry(date_str)
+        # 2026/11/05 新增 is_valid 驗證
+        full_date, is_expired, is_valid = self._calculate_expiry(date_str)
+        # 不直接回傳 None，改回傳 is_valid=False 的物件，讓 main.py 能回覆「無效日期！」
         # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         
         court_raw = match.group(3)
@@ -293,33 +303,42 @@ class MessageParser:
             #---------------------------------------------------------------------------------------------
             # 2026/10/27 新增
             full_date=full_date,
-            is_expired=is_expired
+            is_expired=is_expired,
+            is_valid=is_valid
             # 修改終點
             #---------------------------------------------------------------------------------------------
         )
     
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     # 2026/10/28  新增程式碼
+    # 2026/11/05  新增 is_valid 驗證（拒絕無效日期如 11/31）
     def _calculate_expiry(self, date_str: str) -> tuple:
-        """計算 full_date 與 is_expired"""
+        """計算 full_date、is_expired 與 is_valid
+
+        Returns:
+            (full_date, is_expired, is_valid)
+            - is_valid=False 表示日期無效（如 11/31），應拒絕處理
+        """
         today = datetime.now()
         month, day = date_str.split('/')
-    
+
         year = today.year
         if int(month) < today.month:
             year += 1  # 跨年份邊界
-    
+
         full_date = f"{year}/{month}/{day}"
-    
+
         is_expired = False
+        is_valid = True
         try:
             target_date = datetime(year, int(month), int(day))
             if target_date.date() < today.date():
                 is_expired = True
-        except:
-            pass
+        except ValueError:
+            # 日期無效（如 11/31、13/45），標記為不合法
+            is_valid = False
 
-        return full_date, is_expired
+        return full_date, is_expired, is_valid
     # 修改終點
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     def _normalize_court(self, court_raw: str) -> str:

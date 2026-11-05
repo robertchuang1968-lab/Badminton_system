@@ -29,6 +29,13 @@ class RegistrationEngine:
             處理結果字典
         """
         with self._lock:
+            # 檢查日期是否有效
+            if not announcement.is_valid:
+                return {
+                    'success': False,
+                    'message': "⚠️ 無效日期！月份或日期超出範圍（如 11/32）。\n請使用有效日期重新發布公告。"
+                }
+            
             filepath = self.filename_engine.get_filepath(announcement.date_str, announcement.court)
             
             if filepath.exists():
@@ -169,6 +176,11 @@ class RegistrationEngine:
                         'success': False,
                         'message': f"⚠️ {reg.date_str} {self._get_court_name(reg.court)} 已過期，請報名其它場次"
                     }
+                if not reg.is_valid:
+                    return {
+                        'success': False,
+                        'message': "⚠️ 無效日期！月份或日期超出範圍（如 11/31）。\n請使用有效日期重新輸入。"
+                    }
             # 修改終點
             # -----------------------------------------------------------------------------------------------------------
 
@@ -281,8 +293,8 @@ class RegistrationEngine:
         current_list = excel_data['name_list']
         capacity = excel_data.get('capacity', MAX_CAPACITY)
 
-        # 計算符合的名字數量
-        match_count = sum(1 for n in current_list if n and registration.name in n)
+        # 計算符合的名字數量（使用精確匹配，避免 "Jo" 匹配 "Joshua"）
+        match_count = sum(1 for n in current_list if n and n.strip() == registration.name.strip())
 
         if match_count < abs(registration.num):
             return {
@@ -300,7 +312,7 @@ class RegistrationEngine:
         new_substitute = []
         deleted_from_sub = 0
         for name in substitute_part:
-            if deleted_from_sub < abs(registration.num) and name and registration.name in name:
+            if deleted_from_sub < abs(registration.num) and name and name.strip() == registration.name.strip():
                 deleted_from_sub += 1
                 continue
             new_substitute.append(name)
@@ -310,7 +322,7 @@ class RegistrationEngine:
         # 如果還需要刪除，從正取中刪除
         new_regular = []
         for name in regular_part:
-            if remaining > 0 and name and registration.name in name:
+            if remaining > 0 and name and name.strip() == registration.name.strip():
                 remaining -= 1
                 continue
             new_regular.append(name)
@@ -359,7 +371,7 @@ class RegistrationEngine:
             reply += "\n"
 
         # 報名名單標題
-        reply += f"📋 {date_str} {court_name} 報名名單\n\n"
+        #reply += f"📋 {date_str} {court_name} 報名名單\n\n"
 
         # 正取名單（完整序號 1~capacity，包含空白）
         reply += "【正取】\n"

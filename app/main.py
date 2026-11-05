@@ -298,6 +298,19 @@ def create_handler():
                     registration = parser.parse_registration(message_text)
 
                     if registration:
+                        if not registration.is_valid:
+                            reply_text = "⚠️ 無效日期！月份或日期超出範圍（如 11/31）。\n請使用有效日期重新輸入。"
+                            line_bot_api.reply_message(
+                                event.reply_token,
+                                TextSendMessage(text=reply_text)
+                            )
+                            log_service.warning(
+                                "收到無效日期報名",
+                                source_id=source_id,
+                                user_id=user_id,
+                                message=message_text
+                            )
+                            return
                         result = registration_engine.handle_registration(registration)
                     else:
                         # 跳過複製 Bot 回覆的訊息（避免被誤判為公告）

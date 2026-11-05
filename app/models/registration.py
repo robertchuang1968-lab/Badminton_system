@@ -15,6 +15,7 @@ class AnnouncementData:
     name_list: list  # 名單列表
     tail: Optional[str] = None  # 備註尾碼
     capacity: int = 24  # 名額數（從 Tail 解析）
+    is_valid: bool = True  # 日期是否合法（False = 如 11/32 等無效日期）
 
 
 @dataclass
@@ -33,4 +34,5 @@ class RegistrationData:
     # 2026/10/27 新增內容
     full_date: Optional[str] = None  # 完整日期，例如: "2026/10/24"
     is_expired: bool = False         # 是否已過期
+    is_valid: bool = True            # 日期是否合法（False = 如 11/31 等無效日期）
     #------------------------------------------------------------------------
